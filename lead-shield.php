@@ -4,7 +4,7 @@
  * Plugin Name: LeadShield
  * Plugin URI:  https://github.com/amarasa/lead-shield
  * Description: Hooks into Gravity Forms to validate email and phone via external APIs.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Author:      Angelo Marasa
  * Author URI:  https://github.com/amarasa
  * License:     GPL2
@@ -157,18 +157,22 @@ add_filter('gform_field_validation', function ($result, $value, $form, $field) {
         }
 
         $body = wp_remote_retrieve_body($response);
-        // Adjust the response handling as needed based on your API’s actual output.
-        $verification_result = print_r($body, true);
+        // Trim the response to get a clean status code from the API.
+        $verification_result = trim($body);
 
-        if ($verification_result !== 'ok') {
+        // Define which statuses are acceptable.
+        $acceptable_statuses = ['ok', 'antispam_system', 'ok_for_all'];
+
+        if (! in_array($verification_result, $acceptable_statuses)) {
             $result['is_valid'] = false;
-            $result['message']  = 'The email address is invalid or not deliverable.';
+            $result['message']  = 'The email address is invalid or not deliverable. (Status: ' . $verification_result . ')';
         } else {
-            error_log('Email is valid: ' . $email);
+            error_log('Email is valid: ' . $email . ' (Status: ' . $verification_result . ')');
         }
     }
     return $result;
 }, 10, 4);
+
 
 /**
  * Validate phone fields using the NumVerify API.
