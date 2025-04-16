@@ -44,7 +44,7 @@ defined('ABSPATH') || exit;
  */
 function lead_shield_check_acf()
 {
-    if (! function_exists('acf_add_options_page')) {
+    if (!function_exists('acf_add_options_page')) {
         add_action('admin_notices', function () {
             echo '<div class="notice notice-error is-dismissible">';
             echo '<p><strong>LeadShield</strong> requires <a href="https://www.advancedcustomfields.com/" target="_blank">Advanced Custom Fields</a> to be installed and activated.</p>';
@@ -61,7 +61,7 @@ add_action('admin_init', 'lead_shield_check_acf');
  */
 function lead_shield_check_gravity_forms()
 {
-    if (! class_exists('GFForms')) {
+    if (!class_exists('GFForms')) {
         add_action('admin_notices', function () {
             echo '<div class="notice notice-error is-dismissible">';
             echo '<p><strong>LeadShield</strong> requires <a href="https://www.gravityforms.com/" target="_blank">Gravity Forms</a> to be installed and activated.</p>';
@@ -109,7 +109,7 @@ function lead_shield_is_license_valid()
     }
 
     $license_data = json_decode(wp_remote_retrieve_body($response), true);
-    $valid = (! empty($license_data)
+    $valid = (!empty($license_data)
         && isset($license_data['license_info']['status'])
         && strtolower($license_data['license_info']['status']) === 'active');
 
@@ -122,7 +122,7 @@ function lead_shield_is_license_valid()
  */
 function lead_shield_admin_license_check()
 {
-    if (! is_admin()) {
+    if (!is_admin()) {
         return;
     }
     if (empty(get_option('lead_shield_license_key'))) {
@@ -155,7 +155,7 @@ add_action('admin_menu', 'lead_shield_add_license_settings_page');
  */
 function lead_shield_render_license_settings_page()
 {
-    if (! current_user_can('manage_options')) {
+    if (!current_user_can('manage_options')) {
         wp_die(__('You do not have sufficient permissions to access this page.', 'lead-shield'));
     }
 
@@ -193,7 +193,7 @@ function lead_shield_render_license_settings_page()
     if (isset($_POST['remove_license'])) {
         check_admin_referer('lead_shield_license_settings');
         $current_key = get_option('lead_shield_license_key', '');
-        if (! empty($current_key)) {
+        if (!empty($current_key)) {
             $response = wp_remote_post('http://206.189.194.86/api/license/deactivate', [
                 'body'    => [
                     'license_key' => $current_key,
@@ -202,7 +202,7 @@ function lead_shield_render_license_settings_page()
                 ],
                 'timeout' => 15,
             ]);
-            if (! is_wp_error($response) && wp_remote_retrieve_response_code($response) == 200) {
+            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) == 200) {
                 delete_option('lead_shield_license_key');
                 delete_transient('lead_shield_license_valid');
                 echo '<div class="updated"><p>' . __('License removed successfully. LeadShield is now disabled until a valid license key is entered.', 'lead-shield') . '</p></div>';
@@ -228,7 +228,7 @@ function lead_shield_render_license_settings_page()
                 </tr>
             </table>
             <?php submit_button('Update License', 'primary', 'update_license'); ?>
-            <?php if (! empty($current_key)) : ?>
+            <?php if (!empty($current_key)) : ?>
                 <?php submit_button('Remove License', 'secondary', 'remove_license'); ?>
             <?php endif; ?>
         </form>
@@ -243,7 +243,7 @@ function lead_shield_render_license_settings_page()
 function lead_shield_on_deactivation()
 {
     $license_key = get_option('lead_shield_license_key', '');
-    if (! empty($license_key)) {
+    if (!empty($license_key)) {
         wp_remote_post('http://206.189.194.86/api/license/deactivate', [
             'body'    => [
                 'license_key' => $license_key,
@@ -278,6 +278,7 @@ if (function_exists('acf_add_options_page')) {
      * This group creates two fields:
      *  - EmailListVerify API key (emaillistverify_api_key)
      *  - NumVerify API key (numverify_api_key)
+     *  - Slack Webhook URL (lead_shield_slack_webhook)
      *
      * They are displayed on the LeadShield settings page.
      */
@@ -302,6 +303,14 @@ if (function_exists('acf_add_options_page')) {
                     'type'          => 'text',
                     'instructions'  => 'Enter your NumVerify API key.',
                     'required'      => 1,
+                ),
+                array(
+                    'key'           => 'field_lead_shield_slack_webhook',
+                    'label'         => 'Slack Webhook URL',
+                    'name'          => 'lead_shield_slack_webhook',
+                    'type'          => 'text',
+                    'instructions'  => 'Enter your Slack webhook URL for notifications.',
+                    'required'      => 0,
                 ),
             ),
             'location' => array(
@@ -343,11 +352,10 @@ if (lead_shield_is_license_valid()) {
      */
     add_filter('gform_field_validation', function ($result, $value, $form, $field) {
         if ($field->type === 'email') {
-            // Retrieve API key and notification flag from LeadShield settings.
+            // Retrieve API key from LeadShield settings.
             $api_key = get_field('emaillistverify_api_key', 'option');
-            $notification_sent = get_field('notification_sent', 'option'); // Expected to be false by default
-            // You can hard-code your Slack Webhook URL or retrieve it from a secure option.
-            $slack_webhook_url = 'https://hooks.slack.com/services/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';
+            // Get the Slack Webhook URL from the custom ACF field.
+            $slack_webhook_url = get_field('lead_shield_slack_webhook', 'option');
 
             // Step 1: Check daily email verification credits.
             $credits_api_url = "https://apps.emaillistverify.com/api/credits?secret={$api_key}";
@@ -363,11 +371,6 @@ if (lead_shield_is_license_valid()) {
 
             // Step 2: Decide based on available credits.
             if ($daily_available > 0) {
-                // Ensure the notification flag is reset.
-                if ($notification_sent !== false) {
-                    update_field('notification_sent', false, 'option');
-                }
-
                 // Proceed with email validation.
                 $email = sanitize_email($value);
                 $api_url = "https://apps.emaillistverify.com/api/verifEmail?secret={$api_key}&email={$email}";
@@ -390,25 +393,21 @@ if (lead_shield_is_license_valid()) {
                 }
             } else {
                 // Daily credits are exhausted.
-                if (!$notification_sent) {
+                if (!empty($slack_webhook_url)) {
                     // Get the current domain.
                     $domain = parse_url(home_url(), PHP_URL_HOST);
                     $message = "{$domain} - EmailListVerify has run out of daily credits. LeadShield is automatically disabled until daily credits reset to prevent leads from being blocked.";
                     // Send Slack notification using the webhook.
-                    if (!empty($slack_webhook_url)) {
-                        $payload = json_encode([
-                            "text" => $message
-                        ]);
-                        $args = [
-                            'body'    => $payload,
-                            'headers' => [
-                                'Content-Type' => 'application/json'
-                            ],
-                        ];
-                        wp_remote_post($slack_webhook_url, $args);
-                    }
-                    // Set the notification flag to true.
-                    update_field('notification_sent', true, 'option');
+                    $payload = json_encode([
+                        "text" => $message
+                    ]);
+                    $args = [
+                        'body'    => $payload,
+                        'headers' => [
+                            'Content-Type' => 'application/json'
+                        ],
+                    ];
+                    wp_remote_post($slack_webhook_url, $args);
                 }
                 // Bypass email validation; allow the form to continue.
             }
@@ -442,7 +441,7 @@ if (lead_shield_is_license_valid()) {
         }
         $body = wp_remote_retrieve_body($response);
         $verification_result = json_decode($body, true);
-        if (! $verification_result['valid']) {
+        if (!$verification_result['valid']) {
             if (isset($verification_result['error'])) {
                 $result['is_valid'] = false;
                 $result['message']  = 'Invalid phone number: ' . $verification_result['error']['info'];
@@ -452,7 +451,7 @@ if (lead_shield_is_license_valid()) {
             }
             return $result;
         }
-        if (! $verification_result['line_type']) {
+        if (!$verification_result['line_type']) {
             $result['is_valid'] = false;
             $result['message']  = 'The phone number is not a valid mobile or landline.';
             return $result;
