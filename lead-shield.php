@@ -4,7 +4,7 @@
  * Plugin Name: LeadShield
  * Plugin URI:  https://github.com/amarasa/lead-shield
  * Description: Hooks into Gravity Forms to validate email and phone via external APIs.
- * Version:     1.0.2
+ * Version:     1.0.3
  * Author:      Angelo Marasa
  * Author URI:  https://github.com/amarasa
  * License:     GPL2
@@ -37,13 +37,7 @@ defined('ABSPATH') || exit;
    DEPENDENCY CHECKS
 -----------------------------------------------------------------------------*/
 
-/**
- * Check for the ACF dependency.
- *
- * If Advanced Custom Fields isn’t active, display an admin notice.
- */
-function lead_shield_check_acf()
-{
+function lead_shield_check_acf() {
     if (!function_exists('acf_add_options_page')) {
         add_action('admin_notices', function () {
             echo '<div class="notice notice-error is-dismissible">';
@@ -54,13 +48,7 @@ function lead_shield_check_acf()
 }
 add_action('admin_init', 'lead_shield_check_acf');
 
-/**
- * Check for the Gravity Forms dependency.
- *
- * If Gravity Forms isn’t active, display an admin notice.
- */
-function lead_shield_check_gravity_forms()
-{
+function lead_shield_check_gravity_forms() {
     if (!class_exists('GFForms')) {
         add_action('admin_notices', function () {
             echo '<div class="notice notice-error is-dismissible">';
@@ -75,14 +63,7 @@ add_action('admin_init', 'lead_shield_check_gravity_forms');
    LICENSING FUNCTIONS & ADMIN INTERFACE
 -----------------------------------------------------------------------------*/
 
-/**
- * Check whether the stored license key is valid.
- * Uses a transient (cached for one hour) to minimize API calls.
- *
- * @return bool True if valid; false otherwise.
- */
-function lead_shield_is_license_valid()
-{
+function lead_shield_is_license_valid() {
     $cached = get_transient('lead_shield_license_valid');
     if ($cached !== false) {
         return $cached;
@@ -117,11 +98,7 @@ function lead_shield_is_license_valid()
     return $valid;
 }
 
-/**
- * Display an admin notice if no license key exists.
- */
-function lead_shield_admin_license_check()
-{
+function lead_shield_admin_license_check() {
     if (!is_admin()) {
         return;
     }
@@ -135,11 +112,7 @@ function lead_shield_admin_license_check()
 }
 add_action('admin_init', 'lead_shield_admin_license_check');
 
-/**
- * Add a License Settings page under the Settings menu.
- */
-function lead_shield_add_license_settings_page()
-{
+function lead_shield_add_license_settings_page() {
     add_options_page(
         'LeadShield License Settings',
         'LeadShield License',
@@ -150,16 +123,11 @@ function lead_shield_add_license_settings_page()
 }
 add_action('admin_menu', 'lead_shield_add_license_settings_page');
 
-/**
- * Render the License Settings page.
- */
-function lead_shield_render_license_settings_page()
-{
+function lead_shield_render_license_settings_page() {
     if (!current_user_can('manage_options')) {
         wp_die(__('You do not have sufficient permissions to access this page.', 'lead-shield'));
     }
 
-    // Process form submission for updating the license.
     if (isset($_POST['update_license'])) {
         check_admin_referer('lead_shield_license_settings');
         $new_key = sanitize_text_field($_POST['lead_shield_license_key']);
@@ -189,7 +157,6 @@ function lead_shield_render_license_settings_page()
         }
     }
 
-    // Process form submission for removing the license.
     if (isset($_POST['remove_license'])) {
         check_admin_referer('lead_shield_license_settings');
         $current_key = get_option('lead_shield_license_key', '');
@@ -236,12 +203,7 @@ function lead_shield_render_license_settings_page()
 <?php
 }
 
-/**
- * On plugin deactivation, hit the licensing API to deactivate the license,
- * then clear the stored license key and cached validation.
- */
-function lead_shield_on_deactivation()
-{
+function lead_shield_on_deactivation() {
     $license_key = get_option('lead_shield_license_key', '');
     if (!empty($license_key)) {
         wp_remote_post('http://206.189.194.86/api/license/deactivate', [
@@ -262,7 +224,6 @@ register_deactivation_hook(__FILE__, 'lead_shield_on_deactivation');
    ACF SETTINGS & API KEYS
 -----------------------------------------------------------------------------*/
 
-// Only add ACF settings if ACF is active.
 if (function_exists('acf_add_options_page')) {
     acf_add_options_page(array(
         'page_title' => 'LeadShield Settings',
@@ -272,18 +233,7 @@ if (function_exists('acf_add_options_page')) {
         'redirect'   => false,
     ));
 
-    /**
-     * Register ACF Field Group for API Keys.
-     *
-     * This group creates two fields:
-     *  - EmailListVerify API key (emaillistverify_api_key)
-     *  - NumVerify API key (numverify_api_key)
-     *  - Slack Webhook URL (lead_shield_slack_webhook)
-     *
-     * They are displayed on the LeadShield settings page.
-     */
-    function lead_shield_register_acf_field_groups()
-    {
+    function lead_shield_register_acf_field_groups() {
         acf_add_local_field_group(array(
             'key'    => 'group_leadshield_settings',
             'title'  => 'LeadShield API Keys',
@@ -312,6 +262,14 @@ if (function_exists('acf_add_options_page')) {
                     'instructions'  => 'Enter your Slack webhook URL for notifications.',
                     'required'      => 0,
                 ),
+                array(
+                    'key'           => 'field_leadshield_notification_sent',
+                    'label'         => 'Notification Sent',
+                    'name'          => 'notification_sent',
+                    'type'          => 'true_false',
+                    'ui'            => 1,
+                    'default_value' => 0,
+                ),
             ),
             'location' => array(
                 array(
@@ -326,12 +284,7 @@ if (function_exists('acf_add_options_page')) {
     }
     add_action('acf/init', 'lead_shield_register_acf_field_groups');
 
-    /**
-     * Convert API key fields to password inputs.
-     * This filter changes the input type to "password" so that the API keys are masked.
-     */
-    function lead_shield_convert_api_fields_to_password($field)
-    {
+    function lead_shield_convert_api_fields_to_password($field) {
         if (in_array($field['name'], array('emaillistverify_api_key', 'numverify_api_key'))) {
             $field['type'] = 'password';
         }
@@ -344,123 +297,116 @@ if (function_exists('acf_add_options_page')) {
    GRAVITY FORMS VALIDATION HOOKS (ONLY IF LICENSE IS VALID)
 -----------------------------------------------------------------------------*/
 
-// Only register the validation hooks if the license is valid.
 if (lead_shield_is_license_valid()) {
 
-    /**
-     * Validate email fields using the EmailListVerify API.
-     */
     add_filter('gform_field_validation', function ($result, $value, $form, $field) {
+        // Only target email fields
         if ($field->type === 'email') {
-            // Retrieve API key from LeadShield settings.
-            $api_key = get_field('emaillistverify_api_key', 'option');
-            // Get the Slack Webhook URL from the custom ACF field.
-            $slack_webhook_url = get_field('lead_shield_slack_webhook', 'option');
+            // Immediate fail on blank email
+            if (empty($value)) {
+                $result['is_valid'] = false;
+                $result['message']  = __('Email is required.', 'lead-shield');
+                return $result;
+            }
 
-            // Step 1: Check daily email verification credits.
-            $credits_api_url = "https://apps.emaillistverify.com/api/credits?secret={$api_key}";
-            $credits_response = wp_remote_get($credits_api_url);
-            $daily_available = 0;
+            // Retrieve API key and Slack webhook
+            $api_key            = get_field('emaillistverify_api_key', 'option');
+            $slack_webhook_url  = get_field('lead_shield_slack_webhook', 'option');
+
+            // Check daily credit usage
+            $credits_api_url    = "https://apps.emaillistverify.com/api/credits?secret={$api_key}";
+            $credits_response   = wp_remote_get($credits_api_url);
+            $daily_available    = 0;
             if (!is_wp_error($credits_response)) {
-                $credits_body = wp_remote_retrieve_body($credits_response);
-                $credits_data = json_decode($credits_body, true);
+                $credits_data = json_decode(wp_remote_retrieve_body($credits_response), true);
                 if (isset($credits_data['daily']['available'])) {
-                    $daily_available = (int)$credits_data['daily']['available'];
+                    $daily_available = (int) $credits_data['daily']['available'];
                 }
             }
 
-            // Step 2: Decide based on available credits.
+            // Manage one-time Slack notifications via an ACF flag
+            $notif_sent = get_field('notification_sent', 'option');
+
             if ($daily_available > 0) {
-                // Proceed with email validation.
-                $email = sanitize_email($value);
-                $api_url = "https://apps.emaillistverify.com/api/verifEmail?secret={$api_key}&email={$email}";
-                $response = wp_remote_get($api_url);
+                // Reset flag when credits return
+                if ($notif_sent) {
+                    update_field('notification_sent', false, 'option');
+                }
+
+                // Proceed with live email verification
+                $email           = sanitize_email($value);
+                $verification_url = "https://apps.emaillistverify.com/api/verifEmail?secret={$api_key}&email={$email}";
+                $response        = wp_remote_get($verification_url);
                 if (is_wp_error($response)) {
                     $result['is_valid'] = false;
-                    $result['message']  = 'Error verifying email. Please try again later.';
+                    $result['message']  = __('Error verifying email. Please try again later.', 'lead-shield');
                     return $result;
                 }
-                $body = wp_remote_retrieve_body($response);
-                // Trim the response to get a clean status code from the API.
-                $verification_result = trim($body);
-                // Define which statuses are acceptable.
+                $verification_result = trim(wp_remote_retrieve_body($response));
                 $acceptable_statuses = ['ok', 'antispam_system', 'ok_for_all'];
+
                 if (!in_array($verification_result, $acceptable_statuses)) {
                     $result['is_valid'] = false;
-                    $result['message']  = 'The email address is invalid or not deliverable. (Status: ' . $verification_result . ')';
+                    $result['message']  = sprintf(__('The email address is invalid or not deliverable. (Status: %s)', 'lead-shield'), $verification_result);
                 } else {
                     error_log('Email is valid: ' . $email . ' (Status: ' . $verification_result . ')');
                 }
+
             } else {
-                // Daily credits are exhausted.
-                if (!empty($slack_webhook_url)) {
-                    // Get the current domain.
-                    $domain = parse_url(home_url(), PHP_URL_HOST);
-                    $message = "{$domain} - EmailListVerify has run out of daily credits. LeadShield is automatically disabled until daily credits reset to prevent leads from being blocked.";
-                    // Send Slack notification using the webhook.
-                    $payload = json_encode([
-                        "text" => $message
+                // Out of credits: send one-time Slack alert and bypass validation
+                if (!$notif_sent && !empty($slack_webhook_url)) {
+                    $domain  = parse_url(home_url(), PHP_URL_HOST);
+                    $message = sprintf("%s - EmailListVerify has run out of daily credits. LeadShield is automatically disabled until daily credits reset.", $domain);
+                    wp_remote_post($slack_webhook_url, [
+                        'body'    => json_encode(['text' => $message]),
+                        'headers' => ['Content-Type' => 'application/json'],
                     ]);
-                    $args = [
-                        'body'    => $payload,
-                        'headers' => [
-                            'Content-Type' => 'application/json'
-                        ],
-                    ];
-                    wp_remote_post($slack_webhook_url, $args);
+                    update_field('notification_sent', true, 'option');
                 }
-                // Bypass email validation; allow the form to continue.
+                // Bypass email validation
+                return $result;
             }
         }
+
         return $result;
     }, 10, 4);
 
-
-    /**
-     * Validate phone fields using the NumVerify API.
-     */
     add_filter('gform_field_validation', function ($result, $value, $form, $field) {
         if ($field->type !== 'phone') {
             return $result;
         }
-        // Retrieve the NumVerify API key from the LeadShield settings.
         $api_key = get_field('numverify_api_key', 'option');
         if (empty($api_key)) {
             error_log('NumVerify API key is missing in settings.');
             $result['is_valid'] = false;
-            $result['message']  = 'Phone validation is temporarily unavailable. Please try again later.';
+            $result['message']  = __('Phone validation is temporarily unavailable. Please try again later.', 'lead-shield');
             return $result;
         }
-        $phone   = sanitize_text_field($value);
-        $api_url = "http://apilayer.net/api/validate?access_key={$api_key}&number=1{$phone}";
+        $phone    = sanitize_text_field($value);
+        $api_url  = "http://apilayer.net/api/validate?access_key={$api_key}&number=1{$phone}";
         $response = wp_remote_get($api_url);
         if (is_wp_error($response)) {
             $result['is_valid'] = false;
-            $result['message']  = 'Error verifying phone number. Please try again later.';
+            $result['message']  = __('Error verifying phone number. Please try again later.', 'lead-shield');
             return $result;
         }
-        $body = wp_remote_retrieve_body($response);
-        $verification_result = json_decode($body, true);
+        $verification_result = json_decode(wp_remote_retrieve_body($response), true);
         if (!$verification_result['valid']) {
-            if (isset($verification_result['error'])) {
-                $result['is_valid'] = false;
-                $result['message']  = 'Invalid phone number: ' . $verification_result['error']['info'];
-            } else {
-                $result['is_valid'] = false;
-                $result['message']  = 'The phone number is invalid or not deliverable.';
-            }
+            $msg = isset($verification_result['error'])
+                ? $verification_result['error']['info']
+                : __('The phone number is invalid or not deliverable.', 'lead-shield');
+            $result['is_valid'] = false;
+            $result['message']  = sprintf(__('Invalid phone number: %s', 'lead-shield'), $msg);
             return $result;
         }
         if (!$verification_result['line_type']) {
             $result['is_valid'] = false;
-            $result['message']  = 'The phone number is not a valid mobile or landline.';
+            $result['message']  = __('The phone number is not a valid mobile or landline.', 'lead-shield');
             return $result;
         }
-        // Populate the hidden "line_type" field if it exists in the form.
         foreach ($form['fields'] as $form_field) {
             if ($form_field->type === 'hidden' && strtolower($form_field->label) === 'line_type') {
-                $input_name = 'input_' . $form_field->id;
-                $_POST[$input_name] = sanitize_text_field($verification_result['line_type']);
+                $_POST['input_' . $form_field->id] = sanitize_text_field($verification_result['line_type']);
                 break;
             }
         }
