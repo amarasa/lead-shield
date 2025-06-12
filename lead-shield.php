@@ -4,7 +4,7 @@
  * Plugin Name: LeadShield
  * Plugin URI:  https://github.com/amarasa/lead-shield
  * Description: Hooks into Gravity Forms to validate email and phone via external APIs.
- * Version:     1.0.3
+ * Version:     1.1.0
  * Author:      Angelo Marasa
  * Author URI:  https://github.com/amarasa
  * License:     GPL2
@@ -37,7 +37,8 @@ defined('ABSPATH') || exit;
    DEPENDENCY CHECKS
 -----------------------------------------------------------------------------*/
 
-function lead_shield_check_acf() {
+function lead_shield_check_acf()
+{
     if (!function_exists('acf_add_options_page')) {
         add_action('admin_notices', function () {
             echo '<div class="notice notice-error is-dismissible">';
@@ -48,7 +49,8 @@ function lead_shield_check_acf() {
 }
 add_action('admin_init', 'lead_shield_check_acf');
 
-function lead_shield_check_gravity_forms() {
+function lead_shield_check_gravity_forms()
+{
     if (!class_exists('GFForms')) {
         add_action('admin_notices', function () {
             echo '<div class="notice notice-error is-dismissible">';
@@ -63,7 +65,8 @@ add_action('admin_init', 'lead_shield_check_gravity_forms');
    LICENSING FUNCTIONS & ADMIN INTERFACE
 -----------------------------------------------------------------------------*/
 
-function lead_shield_is_license_valid() {
+function lead_shield_is_license_valid()
+{
     $cached = get_transient('lead_shield_license_valid');
     if ($cached !== false) {
         return $cached;
@@ -98,7 +101,8 @@ function lead_shield_is_license_valid() {
     return $valid;
 }
 
-function lead_shield_admin_license_check() {
+function lead_shield_admin_license_check()
+{
     if (!is_admin()) {
         return;
     }
@@ -112,7 +116,8 @@ function lead_shield_admin_license_check() {
 }
 add_action('admin_init', 'lead_shield_admin_license_check');
 
-function lead_shield_add_license_settings_page() {
+function lead_shield_add_license_settings_page()
+{
     add_options_page(
         'LeadShield License Settings',
         'LeadShield License',
@@ -123,7 +128,8 @@ function lead_shield_add_license_settings_page() {
 }
 add_action('admin_menu', 'lead_shield_add_license_settings_page');
 
-function lead_shield_render_license_settings_page() {
+function lead_shield_render_license_settings_page()
+{
     if (!current_user_can('manage_options')) {
         wp_die(__('You do not have sufficient permissions to access this page.', 'lead-shield'));
     }
@@ -203,7 +209,8 @@ function lead_shield_render_license_settings_page() {
 <?php
 }
 
-function lead_shield_on_deactivation() {
+function lead_shield_on_deactivation()
+{
     $license_key = get_option('lead_shield_license_key', '');
     if (!empty($license_key)) {
         wp_remote_post('http://206.189.194.86/api/license/deactivate', [
@@ -233,17 +240,18 @@ if (function_exists('acf_add_options_page')) {
         'redirect'   => false,
     ));
 
-    function lead_shield_register_acf_field_groups() {
+    function lead_shield_register_acf_field_groups()
+    {
         acf_add_local_field_group(array(
             'key'    => 'group_leadshield_settings',
             'title'  => 'LeadShield API Keys',
             'fields' => array(
                 array(
-                    'key'           => 'field_emaillistverify_api_key',
-                    'label'         => 'EmailListVerify API Key',
-                    'name'          => 'emaillistverify_api_key',
+                    'key'           => 'field_mailverify_api_key',
+                    'label'         => 'MailVerify API Key',
+                    'name'          => 'mailverify_api_key',
                     'type'          => 'text',
-                    'instructions'  => 'Enter your EmailListVerify API key.',
+                    'instructions'  => 'Enter your MailVerify API key.',
                     'required'      => 1,
                 ),
                 array(
@@ -284,8 +292,9 @@ if (function_exists('acf_add_options_page')) {
     }
     add_action('acf/init', 'lead_shield_register_acf_field_groups');
 
-    function lead_shield_convert_api_fields_to_password($field) {
-        if (in_array($field['name'], array('emaillistverify_api_key', 'numverify_api_key'))) {
+    function lead_shield_convert_api_fields_to_password($field)
+    {
+        if (in_array($field['name'], array('mailverify_api_key', 'numverify_api_key'))) {
             $field['type'] = 'password';
         }
         return $field;
@@ -310,17 +319,21 @@ if (lead_shield_is_license_valid()) {
             }
 
             // Retrieve API key and Slack webhook
-            $api_key            = get_field('emaillistverify_api_key', 'option');
+            $api_key            = get_field('mailverify_api_key', 'option');
             $slack_webhook_url  = get_field('lead_shield_slack_webhook', 'option');
 
             // Check daily credit usage
-            $credits_api_url    = "https://apps.emaillistverify.com/api/credits?secret={$api_key}";
-            $credits_response   = wp_remote_get($credits_api_url);
+            $credits_api_url    = "https://app.mailverify.ai/api/v1/user/credits_left";
+            $credits_response   = wp_remote_get($credits_api_url, [
+                'headers' => [
+                    'x-auth-mailverify' => $api_key
+                ]
+            ]);
             $daily_available    = 0;
             if (!is_wp_error($credits_response)) {
                 $credits_data = json_decode(wp_remote_retrieve_body($credits_response), true);
-                if (isset($credits_data['daily']['available'])) {
-                    $daily_available = (int) $credits_data['daily']['available'];
+                if (isset($credits_data['creditsLeft'])) {
+                    $daily_available = (int) $credits_data['creditsLeft'];
                 }
             }
 
@@ -335,28 +348,44 @@ if (lead_shield_is_license_valid()) {
 
                 // Proceed with live email verification
                 $email           = sanitize_email($value);
-                $verification_url = "https://apps.emaillistverify.com/api/verifEmail?secret={$api_key}&email={$email}";
-                $response        = wp_remote_get($verification_url);
+                $verification_url = "https://api.mailverify.ai/api/v1/verify/single";
+                $response        = wp_remote_post($verification_url, [
+                    'headers' => [
+                        'Content-Type' => 'application/json',
+                        'x-auth-mailverify' => $api_key
+                    ],
+                    'body' => json_encode([
+                        'email' => $email
+                    ])
+                ]);
                 if (is_wp_error($response)) {
                     $result['is_valid'] = false;
                     $result['message']  = __('Error verifying email. Please try again later.', 'lead-shield');
                     return $result;
                 }
-                $verification_result = trim(wp_remote_retrieve_body($response));
-                $acceptable_statuses = ['ok', 'antispam_system', 'ok_for_all'];
+                $verification_data = json_decode(wp_remote_retrieve_body($response), true);
 
-                if (!in_array($verification_result, $acceptable_statuses)) {
+                // Check if the response has the expected structure
+                if (!isset($verification_data['data']['status'])) {
                     $result['is_valid'] = false;
-                    $result['message']  = sprintf(__('The email address is invalid or not deliverable. (Status: %s)', 'lead-shield'), $verification_result);
-                } else {
-                    error_log('Email is valid: ' . $email . ' (Status: ' . $verification_result . ')');
+                    $result['message']  = __('Error verifying email. Please try again later.', 'lead-shield');
+                    return $result;
                 }
 
+                $verification_status = $verification_data['data']['status'];
+                $acceptable_statuses = ['VALID', 'ACCEPT_ALL', 'UNKNOWN'];
+
+                if (!in_array($verification_status, $acceptable_statuses)) {
+                    $result['is_valid'] = false;
+                    $result['message']  = sprintf(__('The email address is invalid or not deliverable. (Status: %s)', 'lead-shield'), $verification_status);
+                } else {
+                    error_log('Email is valid: ' . $email . ' (Status: ' . $verification_status . ')');
+                }
             } else {
                 // Out of credits: send one-time Slack alert and bypass validation
                 if (!$notif_sent && !empty($slack_webhook_url)) {
                     $domain  = parse_url(home_url(), PHP_URL_HOST);
-                    $message = sprintf("%s - EmailListVerify has run out of daily credits. LeadShield is automatically disabled until daily credits reset.", $domain);
+                    $message = sprintf("%s - MailVerify has run out of credits. LeadShield is automatically disabled until credits are available.", $domain);
                     wp_remote_post($slack_webhook_url, [
                         'body'    => json_encode(['text' => $message]),
                         'headers' => ['Content-Type' => 'application/json'],
