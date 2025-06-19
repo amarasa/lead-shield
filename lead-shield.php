@@ -4,7 +4,7 @@
  * Plugin Name: LeadShield
  * Plugin URI:  https://github.com/amarasa/lead-shield
  * Description: Hooks into Gravity Forms to validate email and phone via external APIs.
- * Version:     1.1.0
+ * Version:     1.1.1
  * Author:      Angelo Marasa
  * Author URI:  https://github.com/amarasa
  * License:     GPL2
@@ -323,7 +323,7 @@ if (lead_shield_is_license_valid()) {
             $slack_webhook_url  = get_field('lead_shield_slack_webhook', 'option');
 
             // Check daily credit usage
-            $credits_api_url    = "https://app.mailverify.ai/api/v1/user/credits_left";
+            $credits_api_url    = "https://api.mailverify.ai/api/v1/user/credits_left";
             $credits_response   = wp_remote_get($credits_api_url, [
                 'headers' => [
                     'x-auth-mailverify' => $api_key
