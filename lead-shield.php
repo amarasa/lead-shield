@@ -4,7 +4,7 @@
  * Plugin Name: LeadShield
  * Plugin URI:  https://github.com/amarasa/lead-shield
  * Description: Hooks into Gravity Forms to validate email and phone via external APIs.
- * Version:     1.1.1
+ * Version:     1.1.2
  * Author:      Angelo Marasa
  * Author URI:  https://github.com/amarasa
  * License:     GPL2
@@ -373,7 +373,7 @@ if (lead_shield_is_license_valid()) {
                 }
 
                 $verification_status = $verification_data['data']['status'];
-                $acceptable_statuses = ['VALID', 'ACCEPT_ALL', 'UNKNOWN'];
+                $acceptable_statuses = ['VALID', 'ACCEPT_ALL', 'UNKNOWN', 'DELIVERABLE'];
 
                 if (!in_array($verification_status, $acceptable_statuses)) {
                     $result['is_valid'] = false;
