@@ -4,7 +4,7 @@
  * Plugin Name: LeadShield
  * Plugin URI:  https://github.com/amarasa/lead-shield
  * Description: Hooks into Gravity Forms to validate email and phone via external APIs.
- * Version:     1.2
+ * Version:     1.21
  * Author:      Angelo Marasa
  * Author URI:  https://github.com/amarasa
  * License:     GPL2
@@ -12,15 +12,18 @@
  * Text Domain: lead-shield
  */
 
-require 'puc/plugin-update-checker.php';
+// require 'puc/plugin-update-checker.php';
 
-use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+// use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
 
-$myUpdateChecker = PucFactory::buildUpdateChecker(
-    'https://github.com/amarasa/lead-shield',
-    __FILE__,
-    'lead-shield'
-);
+// $myUpdateChecker = PucFactory::buildUpdateChecker(
+//     'https://github.com/amarasa/lead-shield',
+//     __FILE__,
+//     'lead-shield'
+// );
+
+// Update checker disabled to avoid GitHub API 403 errors with private repositories
+// To re-enable: uncomment above code and add GitHub authentication if repository is private
 
 defined('ABSPATH') || exit;
 
